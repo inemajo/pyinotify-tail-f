@@ -20,6 +20,7 @@ class inoproc(pyinotify.ProcessEvent):
         self.stream = ''
         self.open_file()
         self.__nbr = os.stat(self.__filename).st_size
+        self.__buff = ''
 
     def open_file(self):
         self.__filefd = os.open(self.__filename, os.O_RDONLY)
@@ -47,9 +48,14 @@ class inoproc(pyinotify.ProcessEvent):
 
         os.lseek(self.__filefd, self.__nbr, os.SEEK_SET)
         buff = os.read(self.__filefd, BUFSIZE)
-
-        self.stream += buff
         self.__nbr += len(buff)
+
+        self.__buff += buff
+        index = self.__buff.rfind('\n')
+        if index  == -1:
+            return
+        self.stream += self.__buff[:index+1]
+        self.__buff = self.__buff[index+1:]
         return
 
     def getdir(self):
