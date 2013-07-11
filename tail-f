@@ -114,12 +114,26 @@ class   tail(pyinotify.Notifier):
         else:
             self.ip.close_file()
 
+    def __wait_events(self):
+        if not self.check_events():
+            return
+
+        self.read_events()
+        self.process_events()
+
+
     def read_stream(self):
         if self.__real_tail == True:
             return self.__process.stdout.readline()
+        
+        self.__wait_events()
         result = self.ip.stream
         self.ip.stream = ''
         return result
+
+    def stop(self):
+        if self.__real_tail == False:
+            pyinotify.Notifier.stop(self)        
 
 if __name__ == "__main__":
     import sys
@@ -144,14 +158,9 @@ if __name__ == "__main__":
     while True:
         try:
             select.select([notifier.getfile()], [], [])
-            if real == False:
-                if notifier.check_events():
-                    notifier.read_events()
-                    notifier.process_events()
             p(notifier)
         except KeyboardInterrupt:
             break
 
-    if real == False:
-        notifier.stop()
+    notifier.stop()
     sys.exit(0)
