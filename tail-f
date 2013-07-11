@@ -94,7 +94,7 @@ class   tail(pyinotify.Notifier):
     def __create_tail(self, filename):
         from subprocess import Popen, PIPE
 
-        self.__process = Popen(['tail', '-f', filename], stdout=PIPE)
+        self.__process = Popen(['tail', '-f', '-n', '0', filename], stdout=PIPE)
         return
 
     def getfile(self):
