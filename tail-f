@@ -19,6 +19,7 @@ class inoproc(pyinotify.ProcessEvent):
         self.__filename = self.__file_dir + '/'  + self.__file_name
         self.stream = ''
         self.open_file()
+        self.__nbr = os.stat(self.__filename).st_size
 
     def open_file(self):
         self.__filefd = os.open(self.__filename, os.O_RDONLY)
