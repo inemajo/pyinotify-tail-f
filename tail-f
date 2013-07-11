@@ -123,7 +123,8 @@ if __name__ == "__main__":
         os.write(1, notifier.read_stream())
 
     def __signal_handler(sig, frame, notifier):
-        notifier.ip.init_file()
+        notifier.ip.close_file()
+        notifier.ip.open_file()
 
     signal.signal(signal.SIGUSR1, lambda s, f : __signal_handler(s, f, notifier))
     
