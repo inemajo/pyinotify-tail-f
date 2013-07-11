@@ -1,0 +1,133 @@
+#!/usr/bin/python
+
+import os
+import pyinotify
+
+SEEK_END = 2
+
+ERR_FILE_NO_EXIST = 0
+ERR_DIR_NO_EXIST  = 1
+
+class tail_exception(Exception):
+    def __init__(self, value):
+        self.value = value
+
+    def __str__(self):
+        return repr(self.value)
+    
+class inoproc(pyinotify.ProcessEvent):
+
+    def __init__(self, file_path):
+        index = file_path.rfind('/')
+        if index == -1:
+            self.__file_name = file_path
+            self.__file_dir = os.getcwd()
+        else:
+            self.__file_name = file_path[index+1:]
+            self.__file_dir = file_path[:index]
+
+        try:
+            self.__file = open(file_path)
+        except IOError:
+            raise tail_exception(ERR_FILE_NO_EXIST)
+        self.__file.seek(0, SEEK_END)
+        self.stream = ''
+        self.__last_file_size = 0
+
+    def getdir(self):
+        return (self.__file_dir)
+
+    def getfile(self):
+        return (self.__file)
+
+    def close_file(self):
+        self.__file.close()
+
+    def reread_file(self):
+        self.__file.close()
+            
+        try:
+            self.__file = open('%s/%s' % (self.__file_dir, self.__file_name), 'r')
+        except IOError:
+            raise tail_exception(ERR_FILE_NO_EXIST)
+
+
+        for line in self.__file.readlines():
+            self.stream += line
+
+        self.__file.seek(0, SEEK_END)
+        
+# --- Inotify bindings ----
+
+    def process_IN_MODIFY(self, event):
+        if self.__file_name != event.name or self.__file_dir != event.path:
+            return
+        
+        size = os.stat(self.__file_dir + '/'  + self.__file_name).st_size
+        if size < self.__last_file_size:
+            self.reread_file()
+        self.__last_file_size = size
+        self.stream += self.__file.readline()
+    
+    def process_IN_MOVE_SELF(self, event):
+        # "The file moved! Continuing to read from that, until a new one is created.."
+        return
+
+    def process_IN_CREATE(self, event):
+        if self.__file_name != event.name or self.__file_dir != event.path:
+            return
+        self.reread_file()
+        return
+
+
+class   tail(pyinotify.Notifier):
+
+    def __init__(self, wm, file_path):
+
+        dirmask = pyinotify.IN_MODIFY | pyinotify.IN_DELETE | pyinotify.IN_MOVE_SELF | pyinotify.IN_CREATE
+
+        self.ip = inoproc(file_path)
+        wm.add_watch(self.ip.getdir(), dirmask)
+        pyinotify.Notifier.__init__(self, wm, self.ip)
+
+    def getfile(self):
+        return self.ip.getfile()
+
+    def close(self):
+        self.ip.close_file()
+
+
+    def read_stream(self):
+        result = self.ip.stream
+        self.ip.stream = ''
+        return result
+
+if __name__ == "__main__":
+    import sys
+    import select
+    import signal
+
+    def p(notifier):
+        os.write(1, notifier.read_stream())
+
+    def __signal_handler(sig, frame, notifier):
+        notifier.ip.reread_file()
+        p(notifier)
+
+    signal.signal(signal.SIGUSR1, lambda s, f : __signal_handler(s, f, notifier))
+    
+    wm = pyinotify.WatchManager()
+    print("On attend \"%s\"" % (sys.argv[1]))
+    notifier = tail(wm, sys.argv[1])
+    while True:
+        try:
+            select.select([notifier.getfile()], [], [])
+            if notifier.check_events():
+                notifier.read_events()
+                notifier.process_events()
+                p(notifier)
+        except KeyboardInterrupt:
+            break
+
+    notifier.stop()
+    sys.exit(0)
