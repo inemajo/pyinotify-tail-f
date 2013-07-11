@@ -117,7 +117,6 @@ if __name__ == "__main__":
     signal.signal(signal.SIGUSR1, lambda s, f : __signal_handler(s, f, notifier))
     
     wm = pyinotify.WatchManager()
-    print("On attend \"%s\"" % (sys.argv[1]))
     notifier = tail(wm, sys.argv[1])
     while True:
         try:
