@@ -1,6 +1,18 @@
 #!/usr/bin/python
+##
+## python inotify example, reproduce the "tail -F -n 0" command mechanism
+##
+## You may use it as a program:
+## Usage: ./tail-f /path/to/file [real]
+##      -if real opt is set the tail programm is call in a pipe
+##
+## Or as a pythonlib see the __main__ example.
+##
+## @Author: Inemajo <inemajo@fsfe.org>
+## Copyright: public domain, there is no copyright
 
 import os
+import sys
 import pyinotify
 
 BUFSIZE = 4096
@@ -82,12 +94,11 @@ class inoproc(pyinotify.ProcessEvent):
 
 class   tail(pyinotify.Notifier):
 
-    def __init__(self, file_path, real_tail = False):
-
+    def __init__(self, file_path, real_tail = False, tail_stderr = sys.stderr):
 
         if real_tail == True:
             self.__real_tail = True
-            self.__create_tail(file_path)
+            self.__create_tail(file_path, tail_stderr)
         else:
             self.__real_tail = False
             dirmask = pyinotify.IN_MODIFY | pyinotify.IN_MOVE_SELF | pyinotify.IN_CREATE
@@ -97,10 +108,19 @@ class   tail(pyinotify.Notifier):
             wm.add_watch(self.ip.getdir(), dirmask)
             pyinotify.Notifier.__init__(self, wm, self.ip)
 
-    def __create_tail(self, filename):
+    def __create_tail(self, filename, tail_stderr):
         from subprocess import Popen, PIPE
 
-        self.__process = Popen(['tail', '-f', '-n', '0', filename], stdout=PIPE)
+        if type(tail_stderr) == str:
+            p_stderr = open(tail_stderr, 'w')
+        elif type(tail_stderr) == file:
+            p_stderr = tail_stderr
+        elif type(tail_stderr) == type(None):
+            p_stderr = open("/dev/null", 'w')
+        else:
+            sys.stderr.write("unknow \"tail_stderr\" type force exit...")
+            sys.exit(1)
+        self.__process = Popen(['tail', '-F', '-n', '0', filename], stdout=PIPE, stderr=p_stderr)
         return
 
     def getfile(self):
@@ -120,7 +140,6 @@ class   tail(pyinotify.Notifier):
 
         self.read_events()
         self.process_events()
-
 
     def read_stream(self):
         if self.__real_tail == True:
@@ -154,7 +173,11 @@ if __name__ == "__main__":
     else:
         real = False # start class instance
 
-    notifier = tail(sys.argv[1], real)
+    # if real is not set __init__ function set to False
+    # if tail_stderr = str -> __init__ function open the file
+    #                = type(None) -> __init__ function open /dev/null block device
+    #                = file -> __init__ function dup2 file python type for tail
+    notifier = tail(sys.argv[1], real_tail = real, tail_stderr = None)
     while True:
         try:
             select.select([notifier.getfile()], [], [])
